@@ -1,0 +1,11 @@
+bind_ip = {{ ansible_default_ipv4.address }}
+port = {{ mongod_port }}
+dbpath = {{ service_dir }}/data
+logpath = {{ service_dir }}/logs/mongod.log
+logappend = true
+fork = true
+directoryperdb = true
+storageEngine = wiredTiger
+maxConns = 10000
+replSet = {{ cluster_name }}repl
+shardsvr = true

@@ -1,0 +1,77 @@
+#!/bin/bash
+# author: Xiaopf
+# mongodb boot shell
+# chkconfig: 2345 80 90
+# description: Activates/Deactivates Mongoc
+#
+
+# Source function library.
+#. /etc/init.d/functions
+
+
+MGDB_PATH="{{ service_dir }}"
+MGDB_CONF="${MGDB_PATH}/conf/mongoc.conf"
+
+cd ${MGDB_PATH}
+
+MGDB_START(){
+
+        if [ ` ps -ef|grep 'mongoc.conf'|grep -v grep|wc -l` -gt 0 ];then
+                echo "MongoDB Config Node already start"
+                exit 1
+        fi
+    ${MGDB_PATH}/bin/mongod -f  ${MGDB_CONF}
+    if [ $? -eq 0 ];then
+        echo -n "MongoDB Config Node start "
+        echo -n "["
+        echo -ne "\033[32m"
+        echo -n "Successful"
+        echo -ne "\e[0m"
+        echo  "]"
+    else
+        echo "MongoDB Config Node start failed"
+
+    fi
+}
+
+MGDB_STOP(){
+
+        ${MGDB_PATH}/bin/mongod -f  ${MGDB_CONF} --shutdown
+        if [ $? -eq 0 ];then
+                echo -n "MongoDB Config Node stop "
+                echo -n "["
+                echo -ne "\033[32m"
+                echo -n "Successful"
+                echo -ne "\e[0m"
+                echo  "]"
+        else
+                echo "MongoDB Config Node stop failed"
+        fi
+}
+
+MGDB_STATUS(){
+
+    ps -ef|grep 'mongoc.conf'|grep -v grep
+    if [ $? != 0 ];then
+        echo "MongoDB is Config Node STOP"
+    fi
+}
+
+case "$1" in
+    start)
+        MGDB_START
+        ;;
+    stop)
+        MGDB_STOP
+        ;;
+    status)
+        MGDB_STATUS
+        ;;
+    restart)
+        MGDB_STOP
+                MGDB_START
+        ;;
+    *)
+        echo $"Usage: $0 { start | stop | status | restart }"
+        exit 1
+esac

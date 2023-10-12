@@ -1,0 +1,38 @@
+global
+    log         127.0.0.1 local2
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     20000
+    user        haproxy
+    group       haproxy
+    daemon
+
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    #option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    option                  clitcpka    # 允许客户端发送tcp keepalive 包保持长连接, 发送间隔 cat /proc/sys/net/ipv4/tcp_keepalive_time
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          1m
+    timeout server          1m
+    timeout http-keep-alive 10s
+    timeout check           10s
+    maxconn                 10240
+
+listen rabbitmq_cluster
+    bind 0.0.0.0:9000
+    mode tcp
+    option tcplog
+    balance leastconn
+    timeout client 3h
+    timeout server 3h
+{% for host in groups['es_hosts'] %}
+    server {{ host }} {{ hostvars[host].ansible_ssh_host }}:9200 check inter 3000 rise 2 fall 3
+{% endfor %}

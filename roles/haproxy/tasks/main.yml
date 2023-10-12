@@ -1,0 +1,25 @@
+- name: install package
+  yum:
+    name:
+      - centos-release-scl
+    state: present
+- name: install package
+  yum:
+    name:
+      - rh-haproxy18-haproxy
+      - rh-haproxy18-haproxy-syspaths
+    state: present
+- name: copy file
+  template:
+    src: 'haproxy.cfg.j2'
+    dest: '/etc/opt/rh/rh-haproxy18/haproxy/haproxy.cfg'
+    mode: '0644'
+- name: start haproxy
+  service:
+    name: 'rh-haproxy18-haproxy'
+    state: started
+    enabled: yes
+- name: check runing
+  shell: "systemctl status rh-haproxy18-haproxy|grep Active"
+  register: haproxy_status
+- debug: var=haproxy_status.stdout

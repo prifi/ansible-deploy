@@ -1,0 +1,4 @@
+__package:
+  - build-essential
+  - checkinstall
+  - zlib1g-dev

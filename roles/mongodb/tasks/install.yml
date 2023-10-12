@@ -1,0 +1,63 @@
+- name: check mongodb localfile is already configured
+  stat:
+    path: "{{ mongodb_file_path }}"
+  connection: local
+  register:  mongodb_file_result
+
+- name: create software files
+  file:
+    path: "{{ software_dir }}"
+    state: directory
+  connection: local
+  when: not mongodb_file_result.stat.exists
+
+- name: download mongodb file
+  get_url:
+    url: "{{ mongodb_file_url }}"
+    dest: "{{ software_dir }}"
+  connection: local
+  when: not mongodb_file_result.stat.exists
+
+- name: edit hosts
+  lineinfile:
+    dest: /etc/hosts
+    regexp: "^{{ hostvars[item].ansible_default_ipv4.address }}.*{{ item }}$"
+    line: "{{ hostvars[item].ansible_default_ipv4.address }} {{item}}"
+    state: present
+  become: yes
+  with_items: "{{ groups['mongo_hosts'] }}"
+
+- name: create directory
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+  with_items:
+    - "{{ install_dir }}"
+    - "{{ service_dir }}"
+
+- name: extract package
+  unarchive:
+    src: "{{ mongodb_file_path }}"
+    dest: "{{ install_dir }}"
+    creates: "{{ install_dir }}/mongodb-linux-x86_64-rhel70-{{ version }}"
+    
+- name: rename mongo
+  copy:
+    src: "{{ install_dir }}/mongodb-linux-x86_64-rhel70-{{ version }}/"
+    dest: "{{ service_dir }}/"
+    remote_src: yes
+
+# 禁用 THP（数据库应用对内存的访问一般都是稀疏访问模式而很少是连续访问模式,如果启用大页面会导致更多的磁盘 IO）
+- name: set transparent_hugepage to never
+  command: "echo never > {{ item }}"
+  with_items:
+   - /sys/kernel/mm/redhat_transparent_hugepage/enabled
+   - /sys/kernel/mm/redhat_transparent_hugepage/defrag
+
+- blockinfile:
+    dest: /etc/rc.local
+    marker: "#{mark} mongodb kernel setting."
+    block: |
+      echo never >> /sys/kernel/mm/transparent_hugepage/enabled
+      echo never >> /sys/kernel/mm/transparent_hugepage/defrag

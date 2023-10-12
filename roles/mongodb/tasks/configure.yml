@@ -1,0 +1,184 @@
+- name: create service directory
+  file:
+    path: "{{ service_dir }}/{{ item }}"
+    state: directory
+    mode: 0755
+  with_items:
+    - conf
+    - config
+    - data
+    - logs
+
+- name: copy file
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: "conf/mongod.conf.j2", dest: "{{ service_dir }}/conf/mongod.conf", mode: "0644" }
+    - { src: "conf/mongoc.conf.j2", dest: "{{ service_dir }}/conf/mongoc.conf", mode: "0644" }
+    - { src: "conf/mongos.conf.j2", dest: "{{ service_dir }}/conf/mongos.conf", mode: "0644" }
+    - { src: "initd/mongod.j2", dest: "/etc/init.d/mongod", mode: "0755" }
+    - { src: "initd/mongoc.j2", dest: "/etc/init.d/mongoc", mode: "0755" }
+    - { src: "initd/mongos.j2", dest: "/etc/init.d/mongos", mode: "0755" }
+
+- name: Add mongodb services.
+  shell: "chkconfig --add {{ item }}  && chkconfig {{ item }} on"
+  with_items:
+    - mongod
+    - mongoc
+    - mongos
+
+# mongoc、mongod 副本集
+- name: check mongoc
+  shell: netstat -tnlp |grep {{ mongoc_port }}
+  register: mongoc_port_status
+  ignore_errors: True
+
+- name: Ensure mongoc is running and enabled on boot.
+  service: "name=mongoc state=restarted enabled=yes"
+  when: mongoc_port_status.rc|int != 0
+
+- name: wait {{ mongoc_port }} open
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: "{{ mongoc_port }}"
+    delay: "{{ check_port_delay }}"
+    timeout: "{{ check_port_timeout }}"
+
+- name: check mongod
+  shell: "netstat -tnlp |grep {{ mongod_port }}"
+  register: mongod_port_status
+  ignore_errors: True
+
+- name: Ensure mongod is running and enabled on boot.
+  service: "name=mongod state=restarted enabled=yes"
+  when: mongod_port_status.rc|int != 0
+
+- name: wait {{ mongod_port }} open
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: "{{ mongod_port }}"
+    delay: "{{ check_port_delay }}"
+    timeout: "{{ check_port_timeout }}"
+
+- block:
+  - name: copy repset js to agent
+    template: src=script/{{ item }}.j2 dest=/tmp/{{ item }}
+    with_items:
+      - create_user.js
+      - create_dbuser.js
+      - mongod_repset.js
+      - mongoc_repset.js
+      - mongos_shard.js
+
+  - name: config repset
+    shell: "{{ service_dir }}/bin/mongo {{ ansible_default_ipv4.address }}:{{ item.port }} /tmp/{{ item.repset_file }}"
+    with_items:
+      - { port: "{{ mongod_port }}", repset_file: "mongod_repset.js" }
+      - { port: "{{ mongoc_port }}", repset_file: "mongoc_repset.js" }
+
+  - name: create user
+    shell: "{{ service_dir }}/bin/mongo {{ ansible_default_ipv4.address }}:{{ item.port }}/{{ item.db }} /tmp/{{ item.user_file }}"
+    with_items:
+      - { port: "{{ mongod_port }}", db: admin, user_file: create_user.js }
+      - { port: "{{ mongod_port }}", db: "{{ mongodb_db }}", user_file: create_dbuser.js }
+      - { port: "{{ mongoc_port }}", db: admin, user_file: create_user.js }
+      - { port: "{{ mongoc_port }}", db: "{{ mongodb_db }}", user_file: create_dbuser.js }
+    ignore_errors: True
+  when: repset_host == 'yes'
+  run_once: true
+
+# mongos 开启分片
+- name: Ensure mongos is running and enabled on boot.
+#  service: "name=mongos state=started enabled=yes"
+  shell: "{{ service_dir }}/bin/mongos -f {{ service_dir }}/conf/mongos.conf"
+  ignore_errors: True
+
+- name: wait {{ mongos_port }} open
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: "{{ mongos_port }}"
+    delay: "{{ check_port_delay }}"
+    timeout: "{{ check_port_timeout }}"
+
+- block:
+  - name: config shard
+    shell: "{{ service_dir }}/bin/mongo {{ ansible_default_ipv4.address }}:{{ mongos_port }} /tmp/mongos_shard.js"
+  when: repset_host == 'yes'
+  run_once: true
+
+# 开启集群认证
+- name: check keyfile if exists
+  stat: path="{{ software_dir }}/{{ cluster_name }}keyfile"
+  connection: local
+  register: mongo_keyfile_result
+
+- name: create keyfile
+  shell: "openssl rand -base64 756 > {{ cluster_name }}keyfile"
+  connection: local
+  args:
+    creates: "{{ software_dir }}/{{ cluster_name }}keyfile"
+    chdir: "{{ software_dir }}"
+  when: not mongo_keyfile_result.stat.exists
+
+- name: copy keyfile
+  copy: src="{{ software_dir }}/{{ cluster_name }}keyfile" dest="{{ service_dir }}/conf/.keyFile" owner=root group=root mode=0600
+
+- name: edit mongodb configure
+  lineinfile:
+    dest: "{{ item }}"
+    line: 'keyFile={{ service_dir }}/conf/.keyFile'
+  with_items:
+    - "{{ service_dir }}/conf/mongod.conf"
+    - "{{ service_dir }}/conf/mongoc.conf"
+    - "{{ service_dir }}/conf/mongos.conf"
+
+- name: stop all
+  shell: "killall {{ item }}"
+  with_items:
+  - mongod
+  - mongos
+
+- name: wait mongod port close
+  wait_for:
+    host: "{{ ansible_default_ipv4.address }}"
+    port: "{{ item | int }}"
+    delay: "{{ check_port_delay }}"
+    timeout: "{{ check_port_timeout }}"
+    state: stopped
+  with_items:
+    - mongod_port
+    - mongoc_port
+    - mongos_port
+
+- name: start all
+  shell: /etc/init.d/{{ item }} start
+  with_items:
+  - mongoc
+  - mongod
+  - mongos
+
+# MongoDB 日志轮转
+- name: copy logrotate.js
+  copy: src=logRotate.js dest="{{service_dir}}/logRotate.js"
+
+- name: mongodb log ratate
+  cron:
+    name: "mongodb logrotate {{ item.name }}"
+    minute: "10"
+    hour: "00"
+    job: "{{ item.job }}"
+  with_items:
+    - {name: "mongod", job: "{{ service_dir }}/bin/mongo {{ ansible_default_ipv4.address }}:{{ mongod_port }}/admin -u root -p {{ mongodb_root_pwd }} {{service_dir}}/logRotate.js >/dev/null 2>&1"}
+    - {name: "mongoc", job: "{{ service_dir }}/bin/mongo {{ ansible_default_ipv4.address }}:{{ mongoc_port }}/admin -u root -p {{ mongodb_root_pwd }} {{service_dir}}/logRotate.js >/dev/null 2>&1"}
+    - {name: "mongos", job: "{{ service_dir }}/bin/mongo {{ ansible_default_ipv4.address }}:{{ mongos_port }}/admin -u root -p {{ mongodb_root_pwd }} {{service_dir}}/logRotate.js >/dev/null 2>&1"}
+
+- name: mongodb log clean
+  cron:
+    name: "mongodb logclean"
+    minute: "20"
+    hour: "00"
+    job: "/usr/bin/find {{ service_dir }}/logs/*log.* -maxdepth 1 -type f -mtime +30 -delete"

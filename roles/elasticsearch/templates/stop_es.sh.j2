@@ -1,0 +1,4 @@
+#!/bin/bash
+
+export ES_HOME={{ deploy_dir }}/elasticsearch-{{ version }}
+kill `cat ${ES_HOME}/pid`

@@ -1,0 +1,94 @@
+- name: install package
+  yum:
+    name:
+      - gcc
+      - gcc-c++
+      - gd
+      - gd-devel
+      - pcre-devel
+      - zlib
+      - zlib-devel
+    state: present
+- name: create dir
+  file:
+    path: '{{ item.path }}'
+    state: '{{ item.state }}'
+    owner: '{{ item.owner }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
+    recurse: yes
+  with_items:
+    - { path: "{{ install_dir }}", state: "directory", owner: "root", group: "root", mode: "0755" }
+- name: downlocad package
+  get_url:
+    url: '{{ item.url }}'
+    dest: '{{ item.dest }}'
+    mode: '{{ item.mode }}'
+    validate_certs: no
+  with_items:
+    - { url: "http://nginx.org/download/nginx-{{ version }}.tar.gz", dest: "{{ install_dir }}/", mode: "0440" }
+    - { url: "https://www.openssl.org/source/openssl-{{ openssl_version }}.tar.gz", dest: "{{ install_dir }}/", mode: "0440" }
+- name: unarchive package
+  unarchive:
+    src: '{{ item.src }}'
+    dest: '{{ install_dir }}'
+    creates: '{{ item.creates }}'
+    remote_src: yes
+  with_items:
+    - { src: "{{ install_dir }}/nginx-{{ version }}.tar.gz", creates: "{{ install_dir }}/nginx-{{ version }}" }
+    - { src: "{{ install_dir }}/openssl-{{ openssl_version }}.tar.gz", creates: "{{ install_dir }}/openssl-{{ openssl_version }}" }
+- name: make openssl
+  shell: |
+      ./config --prefix=/usr/local/openssl && make && make install &&
+      mv /usr/bin/openssl /usr/bin/openssl.bak &&
+      ln -sf /usr/local/openssl/bin/openssl /usr/bin/openssl &&
+      ln -sf /usr/local/openssl/lib/libssl.so.1.1 /usr/lib/libssl.so.1.1 &&
+      ln -sf /usr/local/openssl/lib/libcrypto.so.1.1 /usr/lib/libcrypto.so.1.1 &&
+      ldconfig
+  args:
+    chdir: '{{ install_dir }}/openssl-{{ openssl_version }}'
+    creates: /usr/local/openssl
+- name: check openssl version
+  command: openssl version -a
+  register: openssl_output
+- debug: var=openssl_output.stdout
+- fail:
+    msg: "Openssl can't install correctly."
+  when: openssl_version not in openssl_output.stdout
+- name: make nginx
+  shell: >
+      ./configure --user={{ user }} --group={{ group }} --prefix={{ service_dir }} --with-pcre
+      --with-openssl="{{ install_dir }}/openssl-{{ openssl_version }}"
+      --with-http_ssl_module --with-http_v2_module --with-http_realip_module --with-http_addition_module --with-http_sub_module
+      --with-http_dav_module --with-http_flv_module --with-http_mp4_module --with-http_gunzip_module --with-http_gzip_static_module
+      --with-http_random_index_module --with-http_secure_link_module --with-http_stub_status_module --with-http_auth_request_module --with-http_image_filter_module
+      --with-http_slice_module --with-threads --with-file-aio --with-stream --with-mail_ssl_module --with-stream_ssl_module
+      && make && make install
+  args:
+    chdir: '{{ install_dir }}/nginx-{{ version }}'
+    creates: '{{ service_dir }}'
+- name: copy configure file
+  template:
+    src: '{{ item.src }}'
+    dest: '{{ item.dest }}'
+    mode: 0644
+  with_items:
+    - { src: "nginx.conf.j2", dest: "{{ service_dir }}/conf/nginx.conf" }
+    - { src: "nginx.log.j2", dest: "/etc/logrotate.d/nginx" }
+    - { src: "nginx.service.j2", dest: "/etc/systemd/system/nginx.service" }
+- name: check configure
+  command: '{{ service_dir }}/sbin/nginx -t'
+  register: nginx_output
+- debug: var=nginx_output.stderr_lines
+- fail:
+    msg: "Nginx configuration exception."
+  when: "'ok' not in nginx_output.stderr"
+- name: start nginx
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+- name: check nginx running
+  shell: 'systemctl status nginx.service|grep Active'
+  register: nginx_status
+- debug: var=nginx_status.stdout

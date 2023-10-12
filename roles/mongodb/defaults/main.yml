@@ -1,0 +1,27 @@
+software_dir: "/data/soft"
+install_dir: /usr/local/src
+service_dir: /data/service/mongo-{{ version }}
+mongod_port: 27017
+mongoc_port: 37017
+mongos_port: 47017
+
+check_port_delay: 5
+check_port_timeout: 30
+
+cluster_name: xiaotest  # 按需修改
+version: 4.2.8
+
+mongodb_file: "mongodb-linux-x86_64-rhel70-{{ version }}.tgz"
+mongodb_file_path: "{{ software_dir }}/{{ mongodb_file }}"
+mongodb_file_url: "https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-rhel70-{{ version }}.tgz"
+
+# mongodb 用户管理
+mongodb_root_pwd: "{{ cluster_name }}_123456"
+
+mongodb_uer: "{{ cluster_name }}user"
+mongodb_pwd: 123456
+mongodb_db: "{{ cluster_name }}-db"
+mongodb_roles: [{ "role": "dbOwner", "db": "{{ mongodb_db }}" }]
+
+mongodb_monitor_user: zabbix
+mongodb_monitor_pwd: zabbix

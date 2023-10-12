@@ -1,0 +1,5 @@
+ansible_ssh_port: 22
+ansible_ssh_user: root
+ansible_ssh_pass: 12345678
+
+deploy_dir: /data/service

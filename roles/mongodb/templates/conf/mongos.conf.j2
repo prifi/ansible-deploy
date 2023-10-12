@@ -1,0 +1,7 @@
+bind_ip = {{ ansible_default_ipv4.address }}
+logpath={{ service_dir }}/logs/mongos.log
+logappend = true
+port = {{ mongos_port }}
+fork = true
+maxConns = 10000
+configdb = {{ cluster_name }}cfg/{% for host in groups['mongo_hosts'] %}{{ hostvars[host].ansible_default_ipv4.address }}:{{ mongoc_port }}{% if not loop.last %},{% endif %}{% endfor %}

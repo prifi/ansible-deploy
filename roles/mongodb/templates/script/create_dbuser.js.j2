@@ -1,0 +1,1 @@
+db.createUser({ user: "{{ mongodb_uer }}",pwd: "{{ mongodb_pwd }}",roles: {{ mongodb_roles | to_json }} })

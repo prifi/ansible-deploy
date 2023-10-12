@@ -1,0 +1,2 @@
+sh.addShard("{{ cluster_name }}repl/{{ ansible_default_ipv4.address }}:{{ mongod_port }}")
+printjson(rs.status())

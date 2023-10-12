@@ -1,0 +1,121 @@
+- name: Update host file
+  lineinfile:
+    dest: /etc/hosts
+    regexp: "^{{ hostvars[item].ansible_default_ipv4.address }}.*{{ item }}$"
+    line: "{{ hostvars[item].ansible_default_ipv4.address }} {{item}}"
+    state: present
+  become: yes
+  with_items: "{{ groups['es_hosts'] }}"
+- name: run check file
+  script: check_sysctl.sh
+  register: check_result
+- name: if stdout check_result failed,interrupt exection
+  fail: msg="max virtual memory areas vm.max_map_count is too low, increase to at least 262144"
+  when: check_result.stdout == "false"
+- name: Generate es user
+  user:
+    name: '{{ username }}'
+#- name: Download elasticsearch file
+#  get_url:
+#    url: 'https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{ version }}-linux-x86_64.tar.gz'
+#    dest: '/usr/local/src/elasticsearch-{{ version }}-linux-x86_64.tar.gz'
+#    mode: '0644'
+- name: copy elasticsearch file
+  copy:
+    src: elasticsearch-{{ version }}-linux-x86_64.tar.gz
+    dest: /usr/local/src/elasticsearch-{{ version }}-linux-x86_64.tar.gz
+    mode: 0644
+- name: mkdir Subdirectory
+  file:
+    dest: '{{ deploy_dir }}/elasticsearch-{{ version }}/{{ item }}'
+    mode: 0755
+    state: directory
+    owner: '{{ username }}'
+    group: '{{ groupname }}'
+    recurse: yes
+  with_items:
+    - logs
+    - data
+    - dumppath
+- name: uncomporession
+  unarchive:
+    src: '/usr/local/src/elasticsearch-{{ version }}-linux-x86_64.tar.gz'
+    dest: '{{ deploy_dir }}/'
+    remote_src: yes
+  args:
+    creates: '{{ deploy_dir }}/elasticsearch-{{ version }}/LICENSE.txt'
+- name: modify owner
+  file:
+    dest: '{{ deploy_dir }}/elasticsearch-{{ version }}'
+    owner: '{{ username }}'
+    group: '{{ groupname }}'
+    recurse: yes
+
+- name: copy ca file
+  copy:
+    src: '{{ domain }}-ca.p12'
+    dest: '{{ deploy_dir }}/elasticsearch-{{ version }}/config/{{ domain }}-ca.p12'
+    owner: '{{ username }}'
+    group: '{{ groupname }}'
+    mode: 0644
+- name: copy cert file
+  copy:
+    src: '{{ domain }}-keystore.p12'
+    dest: '{{ deploy_dir }}/elasticsearch-{{ version }}/config/{{ domain }}-keystore.p12'
+    owner: '{{ username }}'
+    group: '{{ groupname }}'
+    mode: 0644
+
+- name: template with_items config
+  template:
+    src: '{{ item.src }}'
+    dest: '{{ item.dest }}'
+    mode: '{{ item.mode }}'
+    owner: '{{ username }}'
+    group: '{{ username }}'
+  with_items:
+    - { src: "jvm.options.j2", dest: "{{ deploy_dir }}/elasticsearch-{{ version }}/config/jvm.options", mode: "0644" }
+    - { src: "elasticsearch.yml.j2", dest: "{{ deploy_dir }}/elasticsearch-{{ version }}/config/elasticsearch.yml", mode: "0644" }
+    - { src: "start_es.sh.j2", dest: "{{ deploy_dir }}/elasticsearch-{{ version }}/bin/start_es.sh", mode: "0755" }
+    - { src: "stop_es.sh.j2", dest: "{{ deploy_dir }}/elasticsearch-{{ version }}/bin/stop_es.sh", mode: "0755" }
+
+- name: add to Startup
+  blockinfile:
+    path: /etc/rc.local
+    block: '{{ deploy_dir }}/elasticsearch-{{ version }}/bin/start_es.sh'
+- name: start es
+  shell: '{{ deploy_dir }}/elasticsearch-{{ version }}/bin/start_es.sh'
+
+- name: add temp super user
+  shell: 'sleep 30 && {{ deploy_dir }}/elasticsearch-{{ version }}/bin/elasticsearch-users useradd tempuser -p ittest123456 -r superuser && sleep 30'
+  when: setpass=='yes'
+- name: Update API User Password
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9200/_xpack/security/user/elastic/_password?pretty"
+    method: PUT
+    body_format: json
+    body: "{ \"password\":\"{{ es_pass }}\" }"
+    status_code: 200
+    user: tempuser
+    password: ittest123456
+    force_basic_auth: yes
+    headers:
+      Content-Type: application/json
+  when: setpass=='yes'
+- name: del temp super user
+  shell: 'sleep 3 && {{ deploy_dir }}/elasticsearch-{{ version }}/bin/elasticsearch-users userdel tempuser && sleep 3'
+  when: setpass=='yes'
+# - name: set elasic max buckets
+#   shell: 'curl -u"elastic:{{ es_pass }}" -X PUT "http://{{ ansible_default_ipv4.address }}:9200/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent": { "search.max_buckets": 50000 }}''
+#   run_once: true
+- name: show setting max buckets
+  shell: 'curl -u"elastic:{{ es_pass }}" -X GET "http://{{ ansible_default_ipv4.address }}:9200/_cluster/settings?pretty"'
+  register: elastic_max_buckets
+  run_once: true
+- debug: var=elastic_max_buckets.stdout
+- name: get es cluster node info
+  shell: 'sleep 3 && curl "http://{{ ansible_default_ipv4.address }}:9200/_cat/nodes?v"'
+  register: get_es_cluster_node_info
+  run_once: true
+- name: show es cluster node info
+  debug: var=get_es_cluster_node_info.stdout verbosity=0

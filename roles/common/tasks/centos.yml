@@ -1,0 +1,133 @@
+- name: set hostname
+  hostname: name="{{ inventory_hostname }}"
+- name: edit hostsfile
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ ansible_default_ipv4.address }}"
+    line: "{{ ansible_default_ipv4.address }} {{ inventory_hostname }}"
+
+- name: yum install package
+  yum:
+    name:
+      - psmisc
+      - rsync
+      - net-tools
+      - wget
+      - vim
+      - ntpdate
+      - sysstat
+      - lrzsz
+      - unzip
+      - git
+      - gcc
+      - gcc-c++
+      - make
+    state: present
+
+- name: set timezone
+  shell: |
+    timedatectl set-timezone Asia/Shanghai
+    ntpdate ntp1.aliyun.com
+    hwclock --systohc
+- name: cron for ntpdate
+  cron:
+    name: Ntpdate Every Time
+    job: "/usr/sbin/ntpdate ntp1.aliyun.com &>/dev/null"
+
+- name: disable selinux
+  shell: "setenforce 0"
+  failed_when: false
+- name: edit selinux config file
+  lineinfile:
+    path: /etc/selinux/config
+    regexp: '^SELINUX='
+    line: "SELINUX=disabled"
+
+- name: stop fairewalld
+  shell: systemctl stop firewalld && systemctl disable firewalld
+- name: stop postfix
+  shell: systemctl stop postfix && systemctl disable postfix
+
+- name: fetch swap info
+  shell: "free |grep Swap | awk '{print $2}'"
+  register: has_open_swap
+- name: print swap info
+  debug: var=has_open_swap.stdout
+- name: diable swap
+  shell: "swapoff -a && sysctl -w vm.swappiness=0"
+  when: has_open_swap | int != 0
+- name: edit fstab file
+  lineinfile:
+    path: /etc/fstab
+    regexp: "swap"
+    state: absent
+  when: has_open_swap | int != 0
+
+- name: ulimit sysctl
+  lineinfile:
+    path: /etc/sysctl.conf
+    line: '{{ item }}'
+  with_items:
+    - net.core.somaxconn = 16384
+    - net.ipv4.ip_local_port_range = 1024 65000
+    - net.ipv4.tcp_rmem = 4096 87380 8388608
+    - net.ipv4.tcp_wmem = 4096 87380 8388608
+    - net.core.rmem_max = 8388608
+    - net.core.wmem_max = 8388608
+    - net.core.netdev_max_backlog = 5000
+    - net.ipv4.tcp_max_syn_backlog = 8192
+    - fs.file-max = 1000000
+    - net.ipv4.tcp_sack = 0
+    - net.ipv4.tcp_dsack = 0
+    - vm.max_map_count = 655360
+- name: ulimit system
+  lineinfile:
+    path: /etc/systemd/system.conf
+    line: '{{ item }}'
+  with_items:
+    - DefaultLimitNOFILE=1000000
+    - DefaultLimitNPROC=65535
+- name: change limits.conf soft nofile
+  lineinfile:
+    dest: /etc/security/limits.conf
+    regexp: '\* soft nofile [0-9]+'
+    backrefs: no
+    line: '* soft nofile 1000000'
+- name: change limits.conf hard nofile
+  lineinfile:
+    dest: /etc/security/limits.conf
+    regexp: '\* hard nofile [0-9]+'
+    backrefs: no
+    line: '* hard nofile 1000000'
+- name: change limits.conf soft nproc
+  lineinfile:
+    dest: /etc/security/limits.conf
+    regexp: '\* soft nproc [0-9]+'
+    backrefs: no
+    line: '* soft nproc 65535'
+- name: change limits.conf hard nproc
+  lineinfile:
+    dest: /etc/security/limits.conf
+    regexp: '\* hard nproc [0-9]+'
+    backrefs: no
+    line: '* hard nproc 65535'
+- name: remove 20-nproc file
+  shell: mv /etc/security/limits.d/20-nproc.conf /etc/security/limits.d/20-nproc.conf.bak
+  args:
+    creates: /etc/security/limits.d/20-nproc.conf.bak
+
+- name: check data disk
+  shell: "lsblk {{ data_disk }}"
+  ignore_errors: yes
+  register: has_data_disk
+- name: mount disk
+  script: part_vdb.sh
+  register: part_vdb_result
+  when: has_data_disk.rc == 0
+- name: check mount result
+  debug: msg="The disk is partitioned"
+  when: part_vdb_result.rc != 0
+  ignore_errors: yes
+- name: check disk result
+  debug: msg="{{ has_data_disk.stderr }}"
+  when: has_data_disk.rc != 0

@@ -1,0 +1,5 @@
+#!/bin/bash
+source /etc/profile
+
+export ES_HOME={{ deploy_dir }}/elasticsearch-{{ version }}
+su {{ username }} -c "sh ${ES_HOME}/bin/elasticsearch -d -p ${ES_HOME}/pid"

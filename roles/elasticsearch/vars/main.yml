@@ -1,0 +1,6 @@
+domain: xiaotest     # 按需修改
+es_pass: xiaotest123 # 按需修改
+username: es
+groupname: es
+version: 7.16.0
+es_heap_size: 512m

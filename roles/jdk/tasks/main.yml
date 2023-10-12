@@ -1,0 +1,40 @@
+#- name: get jdk file
+#  get_url:
+#    url: http://images.xiaopf.com/java.tar.gz
+#    url: https://www.oracle.com/java/technologies/javase/javase8-archive-downloads.html#license-lightbox
+#    dest: /usr/local/src/java.tar.gz
+#    mode: '0644'
+- name: copy jdk file
+  copy:
+    src: java.tar.gz
+    dest: /usr/local/src/java.tar.gz
+    mode: '0644'
+- name: uncomporession
+  unarchive:
+    src: /usr/local/src/java.tar.gz
+    dest: /usr/local/
+    remote_src: yes
+- name: java_env
+  lineinfile:
+    dest: /etc/profile
+    line: '{{ item }}'
+    regexp: '^{{ item }}'
+    state: present
+  with_items:
+    - 'export JAVA_HOME=/usr/local/java'
+    - 'export JRE_HOME=${JAVA_HOME}/jre'
+    - 'export CLASSPATH=.:${JAVA_HOME}/lib:${JRE_HOME}/lib'
+    - 'export PATH=$JAVA_HOME/bin:$PATH'
+  when: version == 'jdk8'
+
+- name: java_env
+  lineinfile:
+    dest: /etc/profile
+    line: '{{ item }}'
+    regexp: '^{{ item }}'
+    state: present
+  with_items:
+    - 'export ES_JAVA_HOME=/usr/local/java'
+    - 'export CLASSPATH=CLASSPATH=.:$ES_JAVA_HOME/lib/dt.jar:$ES_JAVA_HOME/lib/tools.jar '
+    - 'export PATH=$ES_JAVA_HOME/bin:$PATH'
+  when: version == 'jdk11'

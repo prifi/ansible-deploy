@@ -1,0 +1,7 @@
+- name: Initialize CentOS System
+  import_tasks: centos.yml
+  when: 'ansible_distribution in ["CentOS","RedHat","Amazon"]'
+
+#- name: Initialize Ubuntu System
+#  import_tasks: ubuntu.yml
+#  when: 'ansible_distribution in ["Ubuntu","Debian"]'

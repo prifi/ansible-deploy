@@ -1,0 +1,59 @@
+- hosts: test
+  gather_facts: yes
+  vars:
+    filename: test.tar.gz
+  tasks:
+    - service:
+        name: nginx
+        state: stopped
+    - wait_for:
+        port: 80
+        delay: 1
+        timeout: 15
+        state: stopped
+
+#    - ping:
+#      changed_when: true
+#    - name: check | 发布文件是否存在
+#      stat:
+#        path: /tmp/test
+#      connection: local
+#      become: no
+#      register: __deploy_file_stats
+#      changed_when: false
+#      failed_when: not __deploy_file_stats.stat.exists
+#    - ping:
+#    - debug: var=__deploy_file_stats
+#    - debug:
+#        var="ansible_default_ipv4.address, inventory_hostname"
+#    - debug: var=ansible_default_ipv4.address
+
+#     - shell: 'ping -c 1 apiscm-pre.iteam-dress.com'
+#       register: ping
+#     - debug: var=ping.stdout
+     
+#    - shell:
+    
+#    - lineinfile:
+#        dest: /etc/resolv.conf
+#        line: '{{ item.key }} {{ item.val }}'
+#        state: absent
+#      with_items:
+#        - {key: "nameserver", val: "47.15.9.254"}
+#        - {key: "nameserver", val: "184.104.219.254"}
+#        - {key: "nameserver", val: "8.8.4.4"}
+        
+#    - debug: var=vars
+
+#    - shell: ls /usr/local/openssl/ |wc -l
+#      register: result
+#      ignore_errors: True
+#    - debug: var=result
+    
+#    - command: echo 1    
+#      when: result.stdout != "0"
+
+#    - debug: msg="{{hostvars['10.100.1.12'].ansible_ens3.ipv4.address}}"
+#    - debug: msg="{{hostvars['10.100.1.12'].role}}"
+#    - debug: msg="{% for host in groups['nginx'] %}{{ host }}:27017{% if not loop.last %},{% endif %}{% endfor %}"
+#    - debug: msg="{% for host in groups['mongodb_servers'] %}{{ hostvars[host].ansible_default_ipv4.address }}:{{ mongoc_port }}{% if not loop.last %},{% endif %}{% endfor %}"

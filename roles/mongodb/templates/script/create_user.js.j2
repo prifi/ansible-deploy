@@ -1,0 +1,2 @@
+db.createUser({user: "root",pwd: "{{ mongodb_root_pwd }}",roles: [ { role: "root", db: "admin" }]})
+db.createUser({user: "{{ mongodb_monitor_user }}",pwd: "{{ mongodb_monitor_pwd }}",roles: [{ role: "clusterMonitor", db: "admin" }]})

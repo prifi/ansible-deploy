@@ -1,0 +1,18 @@
+# 2023-9-21 16:03:09
+
+# Run command:
+# Example: ansible-playbook -i hosts main.yml -e "target=all" -e "role=common"
+
+- name: Execute tasks of "{{ role }}"
+  hosts: "{{ target }}"
+  remote_user: root
+
+  roles:
+    - "{{ role }}"
+
+  post_tasks:
+    - debug:
+        msg: "Deploy to {{ target }} for {{ role }} is completed."
+    - debug:
+        msg: "The initialization is completed and the host needs to be restarted. Exapmle Run Command: $ ansible -i hosts all -m reboot"
+      when: role == "common"

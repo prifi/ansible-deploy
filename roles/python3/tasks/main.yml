@@ -1,0 +1,84 @@
+---
+
+- name: Check if Python local file is already configured
+  stat:
+    path: "{{ python_file_path }}"
+  connection: local
+  register: python_file_result
+
+- name: Create software directory
+  file: path={{ software_files_path }} state=directory
+  connection: local
+  when: not python_file_result.stat.exists
+
+- name: Downlocal python file
+  get_url: url={{ python_file_url }} dest={{ software_files_path }}
+  connection: local
+  when: not python_file_result.stat.exists
+
+- name: Check python remote is already configured.
+  stat: path="/usr/bin/python3"
+  register: python_link_result
+
+- name: Ensure packages are installed
+  yum:
+    name:
+      - zlib
+      - zlib-devel
+      - openssl
+      - openssl-devel
+      - python-devel
+      - gcc
+    state: present
+
+- name: Copy python file
+  unarchive:
+    src: "{{ python_file_path }}"
+    dest: "{{ software_install_path }}"
+    creates: "{{ software_install_path }}/Python-{{ python_version }}"
+  when: not python_link_result.stat.exists
+
+- name: Build python
+  shell: "./configure --prefix={{ python_install_path }} && make && make install"
+  args:
+    chdir: "{{ software_install_path }}/Python-{{ python_version }}"
+    creates: "/usr/bin/python3"
+  when: not python_link_result.stat.exists
+
+- name: Link binary file
+  shell: |
+    ln -sfv {{ python_install_path }}/bin/python{{ python_bin_version }} /usr/bin/python3
+    ln -sfv {{ python_install_path }}/bin/pip{{ python_bin_version }} /usr/bin/pip3
+  args:
+    creates: "/usr/bin/python3"
+  when: not python_link_result.stat.exists
+
+- name: Check python version
+  command: python3 -V
+  register: python3_status
+- debug: var=python3_status.stdout
+
+- name: Check pip if exists
+  stat: path="/usr/bin/pip3"
+  register: pip_software_result
+
+- name: Install python3 pip
+  shell: curl -sS https://bootstrap.pypa.io/get-pip.py | python
+  when: not pip_software_result.stat.exists
+
+- name: Create pip config dir
+  file: dest=~/.pip state=directory
+  when: change_pip_source
+
+- name: Create pip config dir
+  file: dest=~/.pip/pip.conf state=touch
+  when: change_pip_source
+
+- name: Change pip source
+  lineinfile:
+   dest: "~/.pip/pip.conf"
+   line: "{{ item }}"
+  with_items:
+    - "[global]"
+    - "index-url = {{ pip_source_url }}"
+  when: change_pip_source

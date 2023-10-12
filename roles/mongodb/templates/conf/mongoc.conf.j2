@@ -1,0 +1,9 @@
+bind_ip = {{ ansible_default_ipv4.address }}
+dbpath = {{ service_dir }}/config
+logpath = {{ service_dir }}/logs/mongoc.log
+logappend = true
+port = {{ mongoc_port }}
+fork = true
+configsvr = true
+replSet = {{ cluster_name }}cfg
+maxConns = 10000

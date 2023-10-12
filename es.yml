@@ -1,0 +1,13 @@
+- hosts: es
+  remote_user: root
+
+  vars_prompt:
+    - name: has_install_jdk
+      prompt: Do you want to install JDK [yes/no]?
+      default: "no"
+      private: no
+
+  roles:
+    - { role: jdk, when: "has_install_jdk == 'yes'" }
+    - { role: es, when: "has_install_jdk == 'yes'" }
+    - { role: es, when: "has_install_jdk == 'no'" }

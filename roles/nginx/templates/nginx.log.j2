@@ -1,0 +1,15 @@
+{{ service_dir }}/logs/*.log {
+daily
+rotate 30
+missingok
+notifempty
+dateext
+nocompress
+create 644 root root
+sharedscripts
+postrotate
+    if [ -f {{ service_dir }}/logs/nginx.pid ]; then
+        kill -USR1 `cat {{ service_dir }}/logs/nginx.pid`
+    fi
+endscript
+}

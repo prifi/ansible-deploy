@@ -1,0 +1,52 @@
+- name: Ensure docker history packages are removed.
+  yum: "name={{ item }} state=absent"
+  with_items: "{{ docker_old }}"
+
+- command: modprobe br_netfilter
+- name: Set kernel forward.
+  lineinfile:
+    dest: /etc/sysctl.conf
+    line: "{{ item }}"
+    regexp: "^{{ item }}"
+    state: present
+  become: yes
+  with_items:
+    - "net.ipv4.ip_forward = 1"
+    - "net.bridge.bridge-nf-call-ip6tables = 1"
+    - "net.bridge.bridge-nf-call-iptables = 1"
+- command: sysctl -p
+
+- name: Install docker repo.
+  shell: "yum-config-manager --add-repo {{ docker_repo }}"
+
+#- name: Modify the docker software source for keda.
+#  replace:
+#    path: /etc/yum.repos.d/docker-ce.repo
+#    regexp: 'download\.docker\.com'
+#    replace: "mirrors.ustc.edu.cn/docker-ce"
+
+- name: Create Docker config directory.
+  file: path={{ item }} state=directory
+  with_items:
+    - "{{ docker_data_root }}"
+    - /etc/docker
+  
+- name: Configure docker startup parameters.
+  template:
+    src: daemon.json.j2
+    dest: "/etc/docker/daemon.json"
+
+- name: Ensure docker-ce are installed.
+  yum: "name={{ docker_ce_packages }} state=present update_cache=yes enablerepo=docker-ce-stable"
+
+- name: Set docker completion.
+  copy: src=/usr/share/bash-completion/completions/docker dest=/etc/bash_completion.d/docker remote_src=yes
+
+- name: Ensure docker is started and enabled at boot.
+  systemd: name=docker state=started enabled=yes
+  when: docker_start
+
+- name: Cat docker info
+  command: docker info
+  register: docker_info
+- debug: var=docker_info.stdout

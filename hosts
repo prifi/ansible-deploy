@@ -1,0 +1,7 @@
+[mongo_hosts]
+k8stest-001 ansible_ssh_host=10.100.1.11 repset_host=yes
+k8stest-002 ansible_ssh_host=10.100.1.12
+k8stest-003 ansible_ssh_host=10.100.1.13
+
+[test]
+k8stest-002 ansible_ssh_host=10.100.1.12

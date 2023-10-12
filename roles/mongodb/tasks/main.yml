@@ -1,0 +1,5 @@
+# 安装
+- import_tasks: install.yml
+
+# 副本集、分片集群、开启认证、日志轮转
+- import_tasks: configure.yml
