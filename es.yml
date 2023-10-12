@@ -7,6 +7,10 @@
       default: "no"
       private: no
 
+  vars:
+    - domain: "xiaotest"
+    - es_pass: "xiaotest123456"
+
   roles:
     - { role: jdk, when: "has_install_jdk == 'yes'" }
     - { role: es, when: "has_install_jdk == 'yes'" }
