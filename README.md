@@ -8,7 +8,7 @@
 ```shell
 ansible-playbook -i hosts main.yml -e "target=all" -e "role=common"
 ```
-> 执行完common需要重启服务器: ansible -i hosts all -m reboot
+> 执行完common需要重启服务器: `ansible -i hosts all -m reboot`
 
 ## 安装elasticsearch集群
 
