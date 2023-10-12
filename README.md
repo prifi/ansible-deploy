@@ -13,7 +13,7 @@ ansible-playbook -i hosts main.yml -e "target=all" -e "role=common"
 ## 安装elasticsearch集群
 
 1.首先执行生成集群证书文件脚本：`generate_cert.sh` <br>
-2.修改集群基本信息：`domain` `es_pass`
+2.编辑`es.yml`，修改集群基本信息变量：`domain` `es_pass`
 
 ```shell
 $ ansible-playbook -i hosts es.yml 
