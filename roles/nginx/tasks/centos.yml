@@ -27,7 +27,6 @@
     validate_certs: no
   with_items:
     - { url: "http://nginx.org/download/nginx-{{ version }}.tar.gz", dest: "{{ install_dir }}/", mode: "0440" }
-    - { url: "https://www.openssl.org/source/openssl-{{ openssl_version }}.tar.gz", dest: "{{ install_dir }}/", mode: "0440" }
 - name: unarchive package
   unarchive:
     src: '{{ item.src }}'
@@ -36,7 +35,22 @@
     remote_src: yes
   with_items:
     - { src: "{{ install_dir }}/nginx-{{ version }}.tar.gz", creates: "{{ install_dir }}/nginx-{{ version }}" }
-    - { src: "{{ install_dir }}/openssl-{{ openssl_version }}.tar.gz", creates: "{{ install_dir }}/openssl-{{ openssl_version }}" }
+- name: check openssl install dir if exists
+  stat:
+    path: '{{ openssl_install_dir }}'
+  register: openssl_install_dir_result
+- name: download openssl package
+  get_url:
+    url: 'https://www.openssl.org/source/openssl-{{ openssl_version }}.tar.gz'
+    dest: '/data/soft'
+    mode: '0440'
+  when: not openssl_install_dir_result.stat.exists
+- name: unarchive openssl package
+  unarchive:
+    src: '/data/soft/openssl-{{ openssl_version }}.tar.gz'
+    dest: '/data/soft'
+    creates: '{{ openssl_install_dir }}'
+    remote_srt: yes
 - name: make openssl
   shell: |
       ./config --prefix=/usr/local/openssl && make && make install &&
@@ -46,8 +60,9 @@
       ln -sf /usr/local/openssl/lib/libcrypto.so.1.1 /usr/lib/libcrypto.so.1.1 &&
       ldconfig
   args:
-    chdir: '{{ install_dir }}/openssl-{{ openssl_version }}'
+    chdir: '{{ openssl_install_dir }}'
     creates: /usr/local/openssl
+  when: not openssl_install_dir_result.stat.exists
 - name: check openssl version
   command: openssl version -a
   register: openssl_output
@@ -58,7 +73,7 @@
 - name: make nginx
   shell: >
       ./configure --user={{ user }} --group={{ group }} --prefix={{ service_dir }} --with-pcre
-      --with-openssl="{{ install_dir }}/openssl-{{ openssl_version }}"
+      --with-openssl="{{ openssl_install_dir }}"
       --with-http_ssl_module --with-http_v2_module --with-http_realip_module --with-http_addition_module --with-http_sub_module
       --with-http_dav_module --with-http_flv_module --with-http_mp4_module --with-http_gunzip_module --with-http_gzip_static_module
       --with-http_random_index_module --with-http_secure_link_module --with-http_stub_status_module --with-http_auth_request_module --with-http_image_filter_module
